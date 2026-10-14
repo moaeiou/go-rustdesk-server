@@ -3,8 +3,10 @@ name: I've had enough of it, enough of it
 on:
   push:
   workflow_dispatch:
+
 permissions:
   contents: write
+
 jobs:
   build:
     name: Build for ${{ matrix.nickname }}
@@ -23,20 +25,18 @@ jobs:
             nickname: "linux-glibc-amd64v1"
           - tag: ""
             nickname: "linux-glibc-amd64"
+          - tag: "CGO_ENABLED=0"
+            nickname: "linux-musl-amd64"
+          - tag: "CGO_ENABLED=0 GOARCH=arm64 GOARM64=v9.2"
+            nickname: "linux-musl-arm64v9.2"
+          - tag: "CGO_ENABLED=0 GOARCH=arm64 GOARM64=v8"
+            nickname: "linux-musl-arm64v8"
+          - tag: "CGO_ENABLED=0 GOARCH=arm64"
+            nickname: "linux-musl-arm64"
           - tag: "GOOS=darwin GOARCH=arm64"
             nickname: "darwin-arm64"
           - tag: "GOOS=windows GOARCH=amd64"
             nickname: "windows-amd64.exe"
-          - tag: "CGO_ENABLED=0"
-            nickname: "linux-musl-amd64"
-            openwrt: "yes"
-            patch_arch: "x86_64"
-            sdk_name: "openwrt-sdk-x86-64_gcc-14.3.0_musl.Linux-x86_64"
-          - tag: "GOARCH=arm64"
-            nickname: "linux-musl-arm64"
-            openwrt: "yes"
-            patch_arch: "aarch64_generic"
-            sdk_name: "openwrt-sdk-rockchip-armv8_gcc-14.3.0_musl.Linux-x86_64"
 
     steps:
       - name: Checkout
@@ -59,88 +59,18 @@ jobs:
         shell: bash
         run: |
           mv go.mod.backup go.mod
-          ${{ matrix.tag }} go build
-          mv go-rustdesk-server* go-rustdesk-server-${{ matrix.nickname }}
-
-      - name: Preparing build environment
-        if: matrix.openwrt == 'yes'
-        uses: mokanove/mokanove/actions/build-env@main
-
-      - name: Prepare SDK
-        if: matrix.openwrt == 'yes'
-        uses: mokanove/mokanove/actions/prepare-sdk@main
-        with:
-          sdk_name: ${{ matrix.sdk_name }}
-
-      - name: Preparation before compilation
-        if: matrix.openwrt == 'yes'
-        env:
-          PKG_VERSION: ${{ steps.get_version.outputs.version }}
-          PKG_ARCH: ${{ matrix.patch_arch }}
-        shell: bash
-        run: |
-          mkdir -p ${{ matrix.sdk_name }}/package/rsop/root/etc/init.d
-          mkdir -p ${{ matrix.sdk_name }}/package/rsop/root/etc/rustdesk
-
-          printf '%s\n' \
-            'include $(TOPDIR)/rules.mk' \
-            "PKG_NAME:=rsop" \
-            "PKG_VERSION:=${PKG_VERSION}" \
-            "PKG_RELEASE:=1" \
-            "PKG_LICENSE:=MoPL" \
-            "LUCI_TITLE:=Rustdesk Server(Golang implementation) for OpenWrt" \
-            "LUCI_PKGARCH:=${PKG_ARCH}" \
-            'include $(TOPDIR)/feeds/luci/luci.mk' \
-            '# call BuildPackage - OpenWrt buildroot signature' \
-            > ${{ matrix.sdk_name }}/package/rsop/Makefile
-
-          printf '%s\n' \
-            '#!/bin/sh /etc/rc.common' \
-            'START=99' \
-            'STOP=10' \
-            'USE_PROCD=1' \
-            'DATA_DIR="/etc/rustdesk"' \
-            'GORS_BIN="/etc/rustdesk/go-rustdesk-server"' \
-            'start_service() {' \
-            '    procd_open_instance "go-rustdesk-server"' \
-            '    procd_set_param command sh -c "cd '"'"'$DATA_DIR'"'"' && exec '"'"'$GORS_BIN'"'"'"' \
-            '    procd_set_param respawn 3600 3 3' \
-            '    procd_set_param stdout 1' \
-            '    procd_set_param stderr 1' \
-            '    procd_set_param env RUST_LOG=debug' \
-            '    procd_close_instance' \
-            '}' \
-            'service_triggers() {' \
-            '    procd_add_reload_trigger "rsop"' \
-            '}' \
-            > ${{ matrix.sdk_name }}/package/rsop/root/etc/init.d/rsop
-
-          cp $GITHUB_WORKSPACE/go-rustdesk-server-${{ matrix.nickname }} ${{ matrix.sdk_name }}/package/rsop/root/etc/rustdesk/go-rustdesk-server
-          chmod +x ${{ matrix.sdk_name }}/package/rsop/root/etc/rustdesk/go-rustdesk-server
-          chmod +x ${{ matrix.sdk_name }}/package/rsop/root/etc/init.d/rsop
-
-      - name: Build for OpenWrt
-        if: matrix.openwrt == 'yes'
-        shell: bash
-        run: |
-          cd ${{ matrix.sdk_name }}
-          make package/rsop/compile V=s -j$(nproc)
-
-      - name: Rename compilation files
-        if: matrix.openwrt == 'yes'
-        shell: bash
-        run: |
-          mv ${{ matrix.sdk_name }}/bin/packages/*/base/*.apk rsop-${{ steps.get_version.outputs.version }}-${{ matrix.patch_arch }}.apk
+          ${{ matrix.tag }} go build -o go-rustdesk-server-${{ matrix.nickname }}
 
       - name: Release
         uses: softprops/action-gh-release@master
         with:
           tag_name: V${{ steps.get_version.outputs.version }}
-          files: |
-            go-rustdesk-server*
-            rsop-${{ steps.get_version.outputs.version }}-${{ matrix.patch_arch }}.apk
+          files: go-rustdesk-server-${{ matrix.nickname }}
           body: |
             # 📝 Release Notes
-            - Add GOAMD64 binary
+            - Fixes and improvements
+            # ⚠️ BROKEN CHANGES
+            - 这次重写了底层逻辑和目录结构并将依赖和Go版本升级到最新，请注意备份和测试。
+            - 如果您装有旧版本，请卸载旧版本后再安装新版本，避免出现冲突。
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

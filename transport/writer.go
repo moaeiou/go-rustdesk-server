@@ -1,0 +1,65 @@
+package transport
+
+import (
+	"errors"
+	"go-rustdesk-server/protocol"
+	"net"
+	"sync"
+)
+
+type Writer struct {
+	mu             sync.Mutex
+	closeOnce      sync.Once
+	key, _type     string
+	tConn          net.Conn
+	uConn          *net.UDPConn
+	addr           *net.UDPAddr
+	loop, detached bool
+	onClose        func()
+}
+
+func (w *Writer) Type() string { return w._type }
+
+func (w *Writer) Write(payload []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w._type == udp {
+		if w.uConn == nil {
+			return 0, errors.New("UDP connection is nil")
+		}
+		return w.uConn.WriteToUDP(payload, w.addr)
+	}
+	if w._type == tcp {
+		if w.tConn == nil {
+			return 0, errors.New("TCP connection is nil")
+		}
+		frame, err := protocol.Encoder(payload)
+		if err != nil {
+			return 0, err
+		}
+		return w.tConn.Write(frame)
+	}
+	return 0, errors.New("unknown writer type")
+}
+
+func (w *Writer) SetKey(key string) {
+	_ = cache.Set(ctx, w._type+key, w, cacheTimeOut)
+	w.mu.Lock()
+	w.key = key
+	w.mu.Unlock()
+}
+
+func (w *Writer) Detach()        { w.mu.Lock(); w.detached = true; w.mu.Unlock() }
+func (w *Writer) Detached() bool { w.mu.Lock(); defer w.mu.Unlock(); return w.detached }
+
+func (w *Writer) Close() {
+	w.closeOnce.Do(func() {
+		if w._type == tcp && w.tConn != nil {
+			_ = w.tConn.Close()
+		}
+		w.remove()
+		if w.onClose != nil {
+			w.onClose()
+		}
+	})
+}

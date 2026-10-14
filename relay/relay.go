@@ -1,52 +1,56 @@
 package relay
 
 import (
-	"go-rustdesk-server/cmd"
-	"go-rustdesk-server/common"
-	"go-rustdesk-server/model/model_proto"
-	"go-rustdesk-server/my_bytes"
+	"context"
+	"go-rustdesk-server/protocol"
+	"go-rustdesk-server/transport"
 	"google.golang.org/protobuf/proto"
 	"reflect"
 )
 
-func Start() {
-	cmd.Info("Relay TCP listening %s", common.PortRelay)
-	common.NewMonitor(true, "tcp", "[::]"+common.PortRelay, handlerMsg).Start()
+func Run(ctx context.Context) error {
+	transport.Info("Relay TCP listening on port %d", transport.PortRelay)
+	waiting := newWaitingPool()
+	go waiting.run(ctx)
+	defer waiting.close()
+	handler := func(message []byte, writer *transport.Writer) { handlerMsg(message, writer, waiting) }
+	return transport.NewMonitor(true, "tcp", transport.ListenAddress(transport.PortRelay), handler).Run(ctx)
 }
 
-func handlerMsg(msg []byte, writer *common.Writer) {
-	cmd.Info("RELAY-RX %s len %d", writer.GetAddrStr(), len(msg))
-	message := model_proto.RendezvousMessage{}
-	if err := proto.Unmarshal(msg, &message); err != nil || message.Union == nil {
+func handlerMsg(msg []byte, writer *transport.Writer, waiting *waitingPool) {
+	transport.Info("RELAY-RX %s len %d", writer.GetAddrStr(), len(msg))
+	envelope := protocol.RendezvousMessage{}
+	if err := proto.Unmarshal(msg, &envelope); err != nil || envelope.Union == nil {
 		if err != nil {
-			cmd.Fatal("RELAY unmarshal", err)
+			transport.Warn("RELAY unmarshal from %s: %v", writer.GetAddrStr(), err)
 		}
 		return
 	}
-	msgType := reflect.TypeOf(message.Union).String()
-	cmd.Info("RELAY-RX type %s from %s", msgType, writer.GetAddrStr())
+	msgType := reflect.TypeOf(envelope.Union).String()
+	transport.Info("RELAY-RX type %s from %s", msgType, writer.GetAddrStr())
 	switch msgType {
-	case model_proto.TypeRendezvousMessageRequestRelay:
-		rr := message.GetRequestRelay()
+	case protocol.TypeRendezvousMessageRequestRelay:
+		rr := envelope.GetRequestRelay()
 		if rr == nil {
 			return
 		}
 		uuid := rr.GetUuid()
-		cmd.Info("RELAY uuid %s from %s %s", uuid, writer.GetAddrStr(), my_bytes.DecodeAddr(rr.SocketAddr))
+		transport.Info("RELAY uuid %s from %s %s", uuid, writer.GetAddrStr(), protocol.DecodeAddr(rr.SocketAddr))
 		if uuid == "" {
 			return
 		}
-		w, err := common.GetWriter(uuid, common.TCP)
-		if err != nil {
-			cmd.Info("RELAY waiting for peer %s", uuid)
-			writer.SetKey(uuid)
+		writer.Detach()
+		w := waiting.match(uuid, writer)
+		if w == nil {
+			transport.Info("RELAY waiting for peer %s", uuid)
 		} else {
-			cmd.Info("RELAY pairing %s <-> %s", writer.GetAddrStr(), w.GetAddrStr())
-			common.RemoveWriter(writer)
-			common.RemoveWriter(w)
+			w.Detach()
+			transport.Info("RELAY pairing %s <-> %s", writer.GetAddrStr(), w.GetAddrStr())
+			transport.RemoveWriter(writer)
+			transport.RemoveWriter(w)
 			go writer.Copy(w)
 		}
 	default:
-		cmd.Info("RELAY unknown type %s", msgType)
+		transport.Info("RELAY unknown type %s", msgType)
 	}
 }

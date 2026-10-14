@@ -1,39 +1,86 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"go-rustdesk-server/cmd"
-	"go-rustdesk-server/common"
-	"go-rustdesk-server/http_server"
+	"go-rustdesk-server/command"
 	"go-rustdesk-server/relay"
-	"go-rustdesk-server/server"
+	"go-rustdesk-server/rendezvous"
+	"go-rustdesk-server/transport"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "version":
-			cmd.PrintVersion()
+			command.PrintVersion()
 		case "doctor":
-			cmd.Doctor()
+			command.Doctor()
 		case "help":
-			cmd.PrintHelp()
+			command.PrintHelp()
+			return 0
 		default:
-			fmt.Printf("Unknown Command\n")
-			fmt.Printf("Using: ./go-rustdesk-server help for usage.\n")
-			os.Exit(0)
+			command.PrintHelp()
+			return 2
 		}
 	}
-	cmd.Log()
-	http_server.Always200Server()
-	common.LoadKey()
-	go server.Start()
-	relay.Start()
-
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	if err := transport.PrepareDataDir(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if err := transport.Log(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	defer transport.CloseLog()
+	if err := transport.LoadKey(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	errors := make(chan error, 2)
+	go func() { errors <- rendezvous.Run(ctx) }()
+	go func() { errors <- relay.Run(ctx) }()
+	completed := 0
+	failed := false
+	select {
+	case <-ctx.Done():
+		transport.Info("Shutting down")
+	case err := <-errors:
+		completed = 1
+		failed = true
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		} else {
+			fmt.Fprintln(os.Stderr, "critical service stopped unexpectedly")
+		}
+	}
+	stop()
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+	for completed < 2 {
+		select {
+		case err := <-errors:
+			completed++
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+			}
+		case <-timer.C:
+			transport.Warn("Shutdown timed out")
+			return 1
+		}
+	}
+	if failed {
+		return 1
+	}
+	return 0
 }
