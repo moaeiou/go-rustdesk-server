@@ -42,18 +42,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@main
 
-      - name: Get Version & fuck cache
-        id: get_version
+      - name: Fuck cache
         shell: bash
         run: |
-          VERSION=$(grep 'const Version' cmd/version.go | cut -d'"' -f2)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
           mv go.mod go.mod.backup
 
       - name: Set up Go
         uses: actions/setup-go@main
         with:
           go-version: 'stable'
+
+      - name: Get Version
+        id: get_version
+        shell: bash
+        run: |
+          VERSION=$(grep 'const Version' command/version.go | cut -d'"' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Build binary
         shell: bash
