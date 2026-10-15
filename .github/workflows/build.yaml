@@ -75,3 +75,10 @@ jobs:
             - Fixes and improvements
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Send to mirror
+        uses: moaeiou/moaeiou/actions/rsync@main
+        with:
+          local: go-rustdesk-server-${{ matrix.nickname }}
+          remote: go-rustdesk-server/
+          key: ${{ secrets.SSH_KEY }}
