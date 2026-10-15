@@ -35,4 +35,14 @@ func (w *Writer) GetAddrStr() string {
 	return ""
 }
 
+func (w *Writer) GetLocalAddrStr() string {
+	if w._type == udp && w.uConn != nil {
+		return w.uConn.LocalAddr().String()
+	}
+	if w._type == tcp && w.tConn != nil {
+		return w.tConn.LocalAddr().String()
+	}
+	return ""
+}
+
 func (w *Writer) GetAddr() *Addr { address := &Addr{}; address.Parsing(w.GetAddrStr()); return address }

@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -14,26 +16,23 @@ const (
 	colorYellow = "\033[33m"
 )
 
-const (
-	maxLogSize = 10 << 20
-	logBackups = 3
-)
-
 var (
 	Logger    *log.Logger
 	logOutput *rotatingLog
 )
 
 type rotatingLog struct {
-	mu   sync.Mutex
-	path string
-	file *os.File
+	mu       sync.Mutex
+	path     string
+	file     *os.File
+	maxSize  int64
+	maxFiles int
 }
 
 func (w *rotatingLog) Write(data []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if info, err := w.file.Stat(); err == nil && info.Size()+int64(len(data)) > maxLogSize {
+	if info, err := w.file.Stat(); err == nil && info.Size()+int64(len(data)) > w.maxSize {
 		if err := w.rotate(); err != nil {
 			return 0, err
 		}
@@ -45,16 +44,44 @@ func (w *rotatingLog) rotate() error {
 	if err := w.file.Close(); err != nil {
 		return err
 	}
-	_ = os.Remove(w.path + "." + strconv.Itoa(logBackups))
-	for index := logBackups - 1; index >= 1; index-- {
-		_ = os.Rename(w.path+"."+strconv.Itoa(index), w.path+"."+strconv.Itoa(index+1))
+	if err := w.destroyExpiredBackups(); err != nil {
+		return err
 	}
-	_ = os.Rename(w.path, w.path+".1")
+	backupCount := w.maxFiles - 1
+	for index := backupCount - 1; index >= 1; index-- {
+		source := w.path + "." + strconv.Itoa(index)
+		destination := w.path + "." + strconv.Itoa(index+1)
+		if err := os.Rename(source, destination); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	if backupCount > 0 {
+		if err := os.Rename(w.path, w.path+".1"); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
 	file, err := os.OpenFile(w.path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err == nil {
 		w.file = file
 	}
 	return err
+}
+
+func (w *rotatingLog) destroyExpiredBackups() error {
+	matches, err := filepath.Glob(w.path + ".*")
+	if err != nil {
+		return err
+	}
+	for _, path := range matches {
+		index, err := strconv.Atoi(strings.TrimPrefix(path, w.path+"."))
+		if err != nil || index < w.maxFiles {
+			continue
+		}
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
 }
 
 func (w *rotatingLog) Close() error { w.mu.Lock(); defer w.mu.Unlock(); return w.file.Close() }
@@ -87,11 +114,16 @@ func printColored(color, message string) {
 
 func Log() error {
 	logPath := Config.LogPath
+	if err := os.MkdirAll(filepath.Dir(logPath), 0700); err != nil {
+		return err
+	}
 	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
-	logOutput = &rotatingLog{path: logPath, file: f}
+	logOutput = &rotatingLog{
+		path: logPath, file: f, maxSize: Config.MaxLogSize, maxFiles: Config.MaxLogFiles,
+	}
 	Logger = log.New(logOutput, "", log.LstdFlags)
 	return nil
 }

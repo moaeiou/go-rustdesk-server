@@ -60,7 +60,7 @@ func handlerMsg(msg []byte, writer *transport.Writer) {
 	case protocol.TypeRendezvousMessageRequestRelay:
 		if req := envelope.GetRequestRelay(); req != nil {
 			go func(r *protocol.RequestRelay, w *transport.Writer) {
-				resp := RendezvousMessageRequestRelay(r)
+				resp := RendezvousMessageRequestRelay(r, w)
 				if resp != nil {
 					transport.Info("TX response to %s %s", w.Type(), w.GetAddrStr())
 					w.SendMsg(protocol.NewRendezvousMessage(resp))

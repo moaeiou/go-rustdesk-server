@@ -14,12 +14,12 @@ const (
 )
 
 var (
-	PortHTTPAPI = Config.BasePort - 2
-	PortNAT     = Config.BasePort - 1
-	PortSignal  = Config.BasePort
-	PortRelay   = Config.BasePort + 1
-	PortWS      = Config.BasePort + 2
-	PortWebAPI  = Config.BasePort + 3
+	PortHTTPAPI = Config.HTTPPort
+	PortNAT     = Config.NATPort
+	PortSignal  = Config.IDPort
+	PortRelay   = Config.RelayPort
+	PortWS      = Config.WebSocketPort
+	PortWebAPI  = Config.WebAPIPort
 )
 
 type monitor struct {

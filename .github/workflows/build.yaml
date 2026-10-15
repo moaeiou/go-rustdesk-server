@@ -73,8 +73,5 @@ jobs:
           body: |
             # 📝 Release Notes
             - Fixes and improvements
-            # ⚠️ BROKEN CHANGES
-            - 这次重写了底层逻辑和目录结构并将依赖和Go版本升级到最新，请注意备份和测试。
-            - 如果您装有旧版本，请卸载旧版本后再安装新版本，避免出现冲突。
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

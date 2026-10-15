@@ -55,14 +55,29 @@ func GetHostPort(addr string) (string, uint64) {
 	return host, p
 }
 
-// RelayServer returns an optional public relay override. An empty value is
-// intentional: RustDesk clients then reuse the ID-server host and configured
-// relay port, which works for IPv4, IPv6 and DNS without guessing an address.
-func RelayServer() string {
+// RelayServerAddress returns the configured relay endpoint, or derives the
+// interface address that can reach the other peer. Client-provided relay
+// addresses are deliberately ignored because a local client may report
+// localhost, which is unusable by its remote peer.
+func RelayServerAddress(writer *Writer, otherPeerIP string) string {
 	value := strings.TrimSpace(Config.RelayServer)
-	if value == "" {
-		return ""
+	if value != "" {
+		return normalizeRelayAddress(value)
 	}
+	if writer != nil {
+		if host, _, err := net.SplitHostPort(writer.GetLocalAddrStr()); err == nil {
+			if ip := net.ParseIP(strings.Trim(host, "[]")); usableRelayIP(ip) {
+				return net.JoinHostPort(ip.String(), strconv.Itoa(PortRelay))
+			}
+		}
+	}
+	if ip := routedLocalIP(otherPeerIP); usableRelayIP(ip) {
+		return net.JoinHostPort(ip.String(), strconv.Itoa(PortRelay))
+	}
+	return ""
+}
+
+func normalizeRelayAddress(value string) string {
 	if _, _, err := net.SplitHostPort(value); err == nil {
 		return value
 	}
@@ -70,4 +85,25 @@ func RelayServer() string {
 		return net.JoinHostPort(ip.String(), strconv.Itoa(PortRelay))
 	}
 	return net.JoinHostPort(value, strconv.Itoa(PortRelay))
+}
+
+func usableRelayIP(ip net.IP) bool {
+	return ip != nil && !ip.IsUnspecified() && !ip.IsLoopback()
+}
+
+func routedLocalIP(remoteIP string) net.IP {
+	ip := net.ParseIP(strings.Trim(remoteIP, "[]"))
+	if ip == nil || ip.IsUnspecified() {
+		return nil
+	}
+	connection, err := net.DialUDP(udp, nil, &net.UDPAddr{IP: ip, Port: 9})
+	if err != nil {
+		return nil
+	}
+	defer connection.Close()
+	local, _ := connection.LocalAddr().(*net.UDPAddr)
+	if local == nil {
+		return nil
+	}
+	return local.IP
 }

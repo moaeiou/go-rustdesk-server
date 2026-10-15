@@ -9,7 +9,6 @@ import (
 
 var (
 	memoryPeerMap sync.Map
-	relayAddr     = transport.RelayServer()
 )
 
 func RendezvousMessageRegisterPeer(req *protocol.RegisterPeer, writer *transport.Writer) *protocol.RegisterPeerResponse {
