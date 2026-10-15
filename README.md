@@ -62,10 +62,16 @@ elsewhere, set only its location, for example:
 | `log.max_files`         | `4`                  | Total retained files, including current     |
 | `extra.max_connections` | `4096`               | Maximum concurrent protocol TCP connections |
 | `extra.max_frame_size`  | `16777216`           | Maximum framed message size                 |
+| `extra.enforce_key`     | `true`               | Reject clients with a missing or wrong key  |
 
 Relative `base.data_dir` and `log.log_path` values are resolved from the TOML
 file's directory. Unknown keys and malformed TOML stop startup with a clear
 error.
+
+With `extra.enforce_key = true`, punch-hole and relay requests must carry the
+public key printed by the server (the contents of `id_ed25519.pub`). Set it to
+`false` only when intentionally allowing clients without the correct key; they
+may show an insecure-connection confirmation instead.
 
 Peer identities and public keys are persisted atomically in `peers.toml`; no
 peer-store backup file is created. Existing `peers.json` data is migrated once

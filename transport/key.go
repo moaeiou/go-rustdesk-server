@@ -84,3 +84,9 @@ func GetSignPK(version, id string, peerPK []byte) []byte {
 }
 
 func GetPkStr() string { return pkStr }
+
+// KeyMatches reports whether a client may use this server. RustDesk sends the
+// configured server public key in licence_key when requesting a connection.
+func KeyMatches(clientKey string) bool {
+	return !Config.EnforceKey || clientKey == pkStr
+}

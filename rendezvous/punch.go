@@ -10,6 +10,11 @@ var punchHoleGroup = newCallGroup()
 
 func RendezvousMessagePunchHoleRequest(req *protocol.PunchHoleRequest, writer *transport.Writer) protoreflect.ProtoMessage {
 	res := &protocol.PunchHoleResponse{}
+	if !transport.KeyMatches(req.GetLicenceKey()) {
+		transport.Warn("Punch authentication failed from %s for peer %s: invalid key", writer.GetAddrStr(), req.GetId())
+		res.Failure = protocol.PunchHoleResponse_LICENSE_MISMATCH
+		return res
+	}
 	value, exists := memoryPeerMap.Load(req.Id)
 	if !exists {
 		res.Failure = protocol.PunchHoleResponse_ID_NOT_EXIST

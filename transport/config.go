@@ -29,6 +29,7 @@ type RuntimeConfig struct {
 	MaxLogFiles    int
 	MaxConnections int64
 	MaxFrameSize   uint
+	EnforceKey     bool
 }
 
 type configFile struct {
@@ -60,6 +61,7 @@ type logConfig struct {
 type extraConfig struct {
 	MaxConnections int64 `toml:"max_connections"`
 	MaxFrameSize   uint  `toml:"max_frame_size"`
+	EnforceKey     bool  `toml:"enforce_key"`
 }
 
 var Config, configLoadError = loadConfig()
@@ -82,6 +84,7 @@ func loadConfig() (RuntimeConfig, error) {
 		MaxLogFiles:    4,
 		MaxConnections: 4096,
 		MaxFrameSize:   16 << 20,
+		EnforceKey:     true,
 	}
 	path, required := configPath()
 	data, err := os.ReadFile(path)
@@ -102,7 +105,7 @@ func loadConfig() (RuntimeConfig, error) {
 			Path: config.LogPath, Level: config.LogLevel, Color: config.LogColor,
 			MaxSize: config.MaxLogSize, MaxFiles: config.MaxLogFiles,
 		},
-		Extra: extraConfig{MaxConnections: config.MaxConnections, MaxFrameSize: config.MaxFrameSize},
+		Extra: extraConfig{MaxConnections: config.MaxConnections, MaxFrameSize: config.MaxFrameSize, EnforceKey: config.EnforceKey},
 	}
 	decoder := toml.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
@@ -117,6 +120,7 @@ func loadConfig() (RuntimeConfig, error) {
 		LogLevel: file.Log.Level, LogColor: file.Log.Color,
 		MaxLogSize: file.Log.MaxSize, MaxLogFiles: file.Log.MaxFiles,
 		MaxConnections: file.Extra.MaxConnections, MaxFrameSize: file.Extra.MaxFrameSize,
+		EnforceKey: file.Extra.EnforceKey,
 	}
 	configDirectory := filepath.Dir(path)
 	config.DataDirectory = resolveConfigPath(configDirectory, config.DataDirectory)

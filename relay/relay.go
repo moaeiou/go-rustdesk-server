@@ -34,6 +34,11 @@ func handlerMsg(msg []byte, writer *transport.Writer, waiting *waitingPool) {
 		if rr == nil {
 			return
 		}
+		if !transport.KeyMatches(rr.GetLicenceKey()) {
+			transport.Warn("Relay authentication failed from %s: invalid key", writer.GetAddrStr())
+			writer.Close()
+			return
+		}
 		uuid := rr.GetUuid()
 		transport.Info("RELAY uuid %s from %s %s", uuid, writer.GetAddrStr(), protocol.DecodeAddr(rr.SocketAddr))
 		if uuid == "" {
