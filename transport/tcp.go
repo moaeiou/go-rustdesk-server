@@ -99,7 +99,7 @@ func (m *monitor) acceptTCP(conn net.Conn) {
 			_, _ = buf.Write(remaining)
 			frameLength = 0
 			if m.relay {
-				writer.loop = false
+				prepareRelayStream(conn, writer)
 				m.processTCPFrame(frame, conn)
 				return
 			}
@@ -109,6 +109,13 @@ func (m *monitor) acceptTCP(conn net.Conn) {
 			_ = conn.SetReadDeadline(time.Time{})
 		}
 	}
+}
+
+func prepareRelayStream(conn net.Conn, writer *Writer) {
+	// The deadline in acceptTCP only protects the framed relay handshake. Once
+	// handed to the raw relay copier, an idle session must not inherit it.
+	_ = conn.SetReadDeadline(time.Time{})
+	writer.loop = false
 }
 
 func (m *monitor) processTCPFrame(frame []byte, conn net.Conn) {
