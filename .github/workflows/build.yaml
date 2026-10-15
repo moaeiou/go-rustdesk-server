@@ -59,7 +59,7 @@ jobs:
           VERSION=$(grep 'const Version' command/version.go | cut -d'"' -f2)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Build binary
+      - name: Build!
         shell: bash
         run: |
           mv go.mod.backup go.mod
