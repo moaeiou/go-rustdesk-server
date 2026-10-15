@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"go-rustdesk-server/command"
 	"go-rustdesk-server/relay"
@@ -20,6 +21,21 @@ func main() {
 func run() int {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
+		case "run":
+			flags := flag.NewFlagSet("run", flag.ContinueOnError)
+			flags.SetOutput(os.Stderr)
+			configPath := flags.String("c", "", "path to config.toml")
+			flags.StringVar(configPath, "config", "", "path to config.toml")
+			if err := flags.Parse(os.Args[2:]); err != nil || flags.NArg() != 0 {
+				command.PrintHelp()
+				return 2
+			}
+			if *configPath != "" {
+				if err := transport.LoadConfigFile(*configPath); err != nil {
+					fmt.Fprintln(os.Stderr, err)
+					return 1
+				}
+			}
 		case "version":
 			command.PrintVersion()
 		case "doctor":

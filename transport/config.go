@@ -66,6 +66,37 @@ type extraConfig struct {
 
 var Config, configLoadError = loadConfig()
 
+// LoadConfigFile replaces the startup configuration with the file selected by
+// the run command. It must be called before any server goroutines are started.
+func LoadConfigFile(path string) error {
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("resolve config %s: %w", path, err)
+	}
+	previous, existed := os.LookupEnv("RUSTDESK_CONFIG")
+	if err := os.Setenv("RUSTDESK_CONFIG", absolute); err != nil {
+		return fmt.Errorf("select config %s: %w", absolute, err)
+	}
+	loaded, loadErr := loadConfig()
+	if existed {
+		_ = os.Setenv("RUSTDESK_CONFIG", previous)
+	} else {
+		_ = os.Unsetenv("RUSTDESK_CONFIG")
+	}
+	if loadErr != nil {
+		return loadErr
+	}
+	Config = loaded
+	configLoadError = nil
+	PortHTTPAPI = Config.HTTPPort
+	PortNAT = Config.NATPort
+	PortSignal = Config.IDPort
+	PortRelay = Config.RelayPort
+	PortWS = Config.WebSocketPort
+	PortWebAPI = Config.WebAPIPort
+	return nil
+}
+
 func loadConfig() (RuntimeConfig, error) {
 	baseDirectory := executableDir()
 	config := RuntimeConfig{

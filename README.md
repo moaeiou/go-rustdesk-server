@@ -40,9 +40,16 @@ relay_server = "[2001:db8::10]:21117"
 
 ### Configuration
 
-The server reads `config.toml` from its working directory. If the file lives
-elsewhere, set only its location, for example:
-`RUSTDESK_CONFIG=/etc/rustdesk/config.toml ./go-rustdesk-server`.
+Start the server with an explicit configuration file:
+
+```bash
+./go-rustdesk-server run -c ./config.toml
+```
+
+Both `-c` and `--config` are supported. Relative paths inside the configuration
+are resolved from the configuration file's directory. Running the binary
+without a command remains supported and reads `config.toml` from the working
+directory.
 
 | TOML key                | Default              | Purpose                                     |
 | ----------------------- | -------------------- | ------------------------------------------- |
@@ -84,23 +91,6 @@ to retain no log history.
 ```
 
 Using this to get help
-
-### Service Management
-
-Auto-start is usually enabled by default. If the service doesn't start automatically, run the `enable` command manually.
-
-| Action                      | Command                                                         |
-| --------------------------- | --------------------------------------------------------------- |
-| Start                       | `/etc/init.d/rsop start`                                        |
-| Restart                     | `/etc/init.d/rsop restart`                                      |
-| Check status                | `/etc/init.d/rsop status`                                       |
-| Enable on boot              | `/etc/init.d/rsop enable`                                       |
-| Show Key                    | `cat /etc/rustdesk/id_ed25519.pub`                              |
-| Check all standard services | `/etc/rustdesk/go-rustdesk-server doctor example.com`           |
-| Check one service           | `/etc/rustdesk/go-rustdesk-server doctor example.com:21116 udp` |
-
-Doctor prints every address returned by the system resolver and then tests each
-resolved IPv4 and IPv6 address independently without replacing or filtering it.
 
 ## 🔨 How to build
 
