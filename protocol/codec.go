@@ -55,24 +55,32 @@ func Encoder(src []byte) (data []byte, err error) {
 		return
 	}
 	l := len(src)
+	var headerLength int
 	if l <= 0x3F {
-		src = append([]byte{byte(l << 2)}, src...)
+		headerLength = 1
 	} else if l <= 0x3FFF {
-		temp := make([]byte, 2)
-		binary.LittleEndian.PutUint16(temp, uint16(l<<2)|0x1)
-		src = append(temp, src...)
+		headerLength = 2
 	} else if l <= 0x3FFFFF {
-		h := uint32(l<<2) | 0x2
-		temp := make([]byte, 2)
-		binary.LittleEndian.PutUint16(temp, uint16(h&0xFFFF))
-		src = append([]byte{byte(h >> 16)}, src...)
-		src = append(temp, src...)
+		headerLength = 3
 	} else if l <= 0x3FFFFFFF {
-		temp := make([]byte, 4)
-		binary.LittleEndian.PutUint32(temp, uint32((l<<2)|0x3))
-		src = append(temp, src...)
+		headerLength = 4
 	} else {
-		err = errors.New("overflow")
+		return nil, errors.New("overflow")
 	}
-	return src, nil
+	data = make([]byte, headerLength+l)
+	value := uint32(l<<2) | uint32(headerLength-1)
+	switch headerLength {
+	case 1:
+		data[0] = byte(value)
+	case 2:
+		binary.LittleEndian.PutUint16(data, uint16(value))
+	case 3:
+		data[0] = byte(value)
+		data[1] = byte(value >> 8)
+		data[2] = byte(value >> 16)
+	case 4:
+		binary.LittleEndian.PutUint32(data, value)
+	}
+	copy(data[headerLength:], src)
+	return data, nil
 }

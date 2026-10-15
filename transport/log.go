@@ -25,6 +25,7 @@ type rotatingLog struct {
 	mu       sync.Mutex
 	path     string
 	file     *os.File
+	size     int64
 	maxSize  int64
 	maxFiles int
 }
@@ -32,12 +33,14 @@ type rotatingLog struct {
 func (w *rotatingLog) Write(data []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if info, err := w.file.Stat(); err == nil && info.Size()+int64(len(data)) > w.maxSize {
+	if w.size+int64(len(data)) > w.maxSize {
 		if err := w.rotate(); err != nil {
 			return 0, err
 		}
 	}
-	return w.file.Write(data)
+	n, err := w.file.Write(data)
+	w.size += int64(n)
+	return n, err
 }
 
 func (w *rotatingLog) rotate() error {
@@ -63,6 +66,7 @@ func (w *rotatingLog) rotate() error {
 	file, err := os.OpenFile(w.path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err == nil {
 		w.file = file
+		w.size = 0
 	}
 	return err
 }
@@ -123,6 +127,9 @@ func Log() error {
 	}
 	logOutput = &rotatingLog{
 		path: logPath, file: f, maxSize: Config.MaxLogSize, maxFiles: Config.MaxLogFiles,
+	}
+	if info, statErr := f.Stat(); statErr == nil {
+		logOutput.size = info.Size()
 	}
 	Logger = log.New(logOutput, "", log.LstdFlags)
 	return nil

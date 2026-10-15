@@ -11,10 +11,6 @@ func RendezvousMessageLocalAddr(req *protocol.LocalAddr, writer *transport.Write
 }
 
 func RendezvousMessageRequestRelay(req *protocol.RequestRelay, writer *transport.Writer) *protocol.RelayResponse {
-	if !transport.KeyMatches(req.GetLicenceKey()) {
-		transport.Warn("Relay authentication failed from %s for peer %s: invalid key", writer.GetAddrStr(), req.GetId())
-		return &protocol.RelayResponse{RefuseReason: "LICENSE_MISMATCH"}
-	}
 	peerWriter, err := transport.GetWriter(req.GetId(), transport.UDP)
 	if err != nil {
 		return nil
