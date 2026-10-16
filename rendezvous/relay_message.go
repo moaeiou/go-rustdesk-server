@@ -24,8 +24,9 @@ func RendezvousMessageRequestRelay(req *protocol.RequestRelay, writer *transport
 	transport.Info("Relay request id=%s advertised=%s requester=%s peer=%s", req.GetId(), relayAddress, writer.GetAddrStr(), peer.IP)
 	forwarded := proto.Clone(req).(*protocol.RequestRelay)
 	forwarded.RelayServer = relayAddress
+	wait := subscribeForMsg(req.GetId(), []string{protocol.TypeRendezvousMessageRelayResponse})
 	peerWriter.SendMsg(protocol.NewRendezvousMessage(forwarded))
-	_, reply := getMsgForm(req.GetId(), []string{protocol.TypeRendezvousMessageRelayResponse}, 3)
+	_, reply := wait(3)
 	response, ok := reply.(*protocol.RelayResponse)
 	if !ok {
 		return &protocol.RelayResponse{}

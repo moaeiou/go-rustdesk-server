@@ -43,18 +43,20 @@ func RendezvousMessagePunchHoleRequest(req *protocol.PunchHoleRequest, writer *t
 
 	replyWriter, reply := punchHoleGroup.Do(dedupKey, func() (*transport.Writer, protoreflect.ProtoMessage) {
 		if sameIntranet {
+			wait := subscribeForMsg(req.GetId(), []string{protocol.TypeRendezvousMessageLocalAddr})
 			peerWriter.SendMsg(protocol.NewRendezvousMessage(&protocol.FetchLocalAddr{
 				SocketAddr: protocol.EncodeAddr(writer.GetAddrStr()), RelayServer: relayAddress,
 			}))
-			return getMsgForm(req.GetId(), []string{protocol.TypeRendezvousMessageLocalAddr}, 3)
+			return wait(3)
 		}
+		wait := subscribeForMsg(req.GetId(), []string{
+			protocol.TypeRendezvousMessagePunchHoleSent,
+			protocol.TypeRendezvousMessageRelayResponse,
+		})
 		peerWriter.SendMsg(protocol.NewRendezvousMessage(&protocol.PunchHole{
 			SocketAddr: protocol.EncodeAddr(writer.GetAddrStr()), RelayServer: relayAddress, NatType: natType,
 		}))
-		return getMsgForm(req.GetId(), []string{
-			protocol.TypeRendezvousMessagePunchHoleSent,
-			protocol.TypeRendezvousMessageRelayResponse,
-		}, 3)
+		return wait(3)
 	})
 	if reply == nil {
 		res.OtherFailure = "NoReturnMessage"

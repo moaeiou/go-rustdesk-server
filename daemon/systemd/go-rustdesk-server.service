@@ -1,0 +1,42 @@
+[Unit]
+Description=Go RustDesk Server
+Documentation=https://github.com/moaeiou/go-rustdesk-server
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=rustdesk
+Group=rustdesk
+WorkingDirectory=/var/lib/rustdesk
+ExecStart=/usr/local/bin/go-rustdesk-server run -c /etc/go-rustdesk-server/config.toml
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=15s
+LimitNOFILE=65535
+
+# systemd creates these writable directories for the unprivileged service.
+StateDirectory=rustdesk
+LogsDirectory=rustdesk
+
+# Basic service hardening. The server only needs network access plus its state
+# and log directories.
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target
+

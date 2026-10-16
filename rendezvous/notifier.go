@@ -60,22 +60,30 @@ func (n *notifier) publish(key string, writer *transport.Writer, message protore
 	}
 }
 
-func getMsgForm(id string, types []string, timeoutSeconds uint) (*transport.Writer, protoreflect.ProtoMessage) {
-	if timeoutSeconds == 0 {
-		timeoutSeconds = 3
-	}
+type messageWaiter func(timeoutSeconds uint) (*transport.Writer, protoreflect.ProtoMessage)
+
+// subscribeForMsg installs the subscription immediately and returns a waiter.
+// Callers must create the waiter before sending the request, otherwise a fast
+// peer can reply between send and subscribe and force an unnecessary timeout.
+func subscribeForMsg(id string, types []string) messageWaiter {
 	keys := make([]string, len(types))
 	for i, messageType := range types {
 		keys[i] = id + messageType
 	}
 
 	results, cancel := msgNotifier.subscribe(keys)
-	defer cancel()
-
-	select {
-	case result := <-results:
-		return result.Writer, result.Message
-	case <-time.After(time.Duration(timeoutSeconds) * time.Second):
-		return nil, nil
+	return func(timeoutSeconds uint) (*transport.Writer, protoreflect.ProtoMessage) {
+		defer cancel()
+		if timeoutSeconds == 0 {
+			timeoutSeconds = 3
+		}
+		timer := time.NewTimer(time.Duration(timeoutSeconds) * time.Second)
+		defer timer.Stop()
+		select {
+		case result := <-results:
+			return result.Writer, result.Message
+		case <-timer.C:
+			return nil, nil
+		}
 	}
 }

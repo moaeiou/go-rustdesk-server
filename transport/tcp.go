@@ -115,6 +115,18 @@ func prepareRelayStream(conn net.Conn, writer *Writer) {
 	// The deadline in acceptTCP only protects the framed relay handshake. Once
 	// handed to the raw relay copier, an idle session must not inherit it.
 	_ = conn.SetReadDeadline(time.Time{})
+	if tcpConn, ok := conn.(*net.TCPConn); ok {
+		// Keep small control/video packets moving promptly and give short bursts
+		// room without imposing an application-level queue on the relay path.
+		_ = tcpConn.SetNoDelay(true)
+		_ = tcpConn.SetKeepAliveConfig(net.KeepAliveConfig{
+			Enable: true, Idle: 30 * time.Second, Interval: 10 * time.Second, Count: 3,
+		})
+		if size := Config.RelayBufferSize; size > 0 {
+			_ = tcpConn.SetReadBuffer(size)
+			_ = tcpConn.SetWriteBuffer(size)
+		}
+	}
 	writer.loop = false
 }
 

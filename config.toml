@@ -27,6 +27,9 @@ max_files = 4
 [extra]
 # Reject connection requests whose configured server key does not match.
 enforce_key = true
+# Per-socket TCP buffer for absorbing short relay traffic bursts. Set 0 to use
+# the operating system default/autotuning.
+relay_buffer_size = 262144
 
 max_connections = 4096
 max_frame_size = 16777216

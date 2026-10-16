@@ -13,23 +13,24 @@ import (
 const configFileName = "config.toml"
 
 type RuntimeConfig struct {
-	Bind           string
-	HTTPPort       int
-	NATPort        int
-	IDPort         int
-	RelayPort      int
-	WebSocketPort  int
-	WebAPIPort     int
-	RelayServer    string
-	DataDirectory  string
-	LogPath        string
-	LogLevel       string
-	LogColor       bool
-	MaxLogSize     int64
-	MaxLogFiles    int
-	MaxConnections int64
-	MaxFrameSize   uint
-	EnforceKey     bool
+	Bind            string
+	HTTPPort        int
+	NATPort         int
+	IDPort          int
+	RelayPort       int
+	WebSocketPort   int
+	WebAPIPort      int
+	RelayServer     string
+	DataDirectory   string
+	LogPath         string
+	LogLevel        string
+	LogColor        bool
+	MaxLogSize      int64
+	MaxLogFiles     int
+	MaxConnections  int64
+	MaxFrameSize    uint
+	EnforceKey      bool
+	RelayBufferSize int
 }
 
 type configFile struct {
@@ -59,9 +60,10 @@ type logConfig struct {
 }
 
 type extraConfig struct {
-	MaxConnections int64 `toml:"max_connections"`
-	MaxFrameSize   uint  `toml:"max_frame_size"`
-	EnforceKey     bool  `toml:"enforce_key"`
+	MaxConnections  int64 `toml:"max_connections"`
+	MaxFrameSize    uint  `toml:"max_frame_size"`
+	EnforceKey      bool  `toml:"enforce_key"`
+	RelayBufferSize int   `toml:"relay_buffer_size"`
 }
 
 var Config, configLoadError = loadConfig()
@@ -100,22 +102,23 @@ func LoadConfigFile(path string) error {
 func loadConfig() (RuntimeConfig, error) {
 	baseDirectory := executableDir()
 	config := RuntimeConfig{
-		Bind:           "::",
-		HTTPPort:       21114,
-		NATPort:        21115,
-		IDPort:         21116,
-		RelayPort:      21117,
-		WebSocketPort:  21118,
-		WebAPIPort:     21119,
-		DataDirectory:  baseDirectory,
-		LogPath:        filepath.Join(baseDirectory, "rdks.log"),
-		LogLevel:       "info",
-		LogColor:       true,
-		MaxLogSize:     10 << 20,
-		MaxLogFiles:    4,
-		MaxConnections: 4096,
-		MaxFrameSize:   16 << 20,
-		EnforceKey:     true,
+		Bind:            "::",
+		HTTPPort:        21114,
+		NATPort:         21115,
+		IDPort:          21116,
+		RelayPort:       21117,
+		WebSocketPort:   21118,
+		WebAPIPort:      21119,
+		DataDirectory:   baseDirectory,
+		LogPath:         filepath.Join(baseDirectory, "rdks.log"),
+		LogLevel:        "info",
+		LogColor:        true,
+		MaxLogSize:      10 << 20,
+		MaxLogFiles:     4,
+		MaxConnections:  4096,
+		MaxFrameSize:    16 << 20,
+		EnforceKey:      true,
+		RelayBufferSize: 256 << 10,
 	}
 	path, required := configPath()
 	data, err := os.ReadFile(path)
@@ -136,7 +139,10 @@ func loadConfig() (RuntimeConfig, error) {
 			Path: config.LogPath, Level: config.LogLevel, Color: config.LogColor,
 			MaxSize: config.MaxLogSize, MaxFiles: config.MaxLogFiles,
 		},
-		Extra: extraConfig{MaxConnections: config.MaxConnections, MaxFrameSize: config.MaxFrameSize, EnforceKey: config.EnforceKey},
+		Extra: extraConfig{
+			MaxConnections: config.MaxConnections, MaxFrameSize: config.MaxFrameSize,
+			EnforceKey: config.EnforceKey, RelayBufferSize: config.RelayBufferSize,
+		},
 	}
 	decoder := toml.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
@@ -151,7 +157,7 @@ func loadConfig() (RuntimeConfig, error) {
 		LogLevel: file.Log.Level, LogColor: file.Log.Color,
 		MaxLogSize: file.Log.MaxSize, MaxLogFiles: file.Log.MaxFiles,
 		MaxConnections: file.Extra.MaxConnections, MaxFrameSize: file.Extra.MaxFrameSize,
-		EnforceKey: file.Extra.EnforceKey,
+		EnforceKey: file.Extra.EnforceKey, RelayBufferSize: file.Extra.RelayBufferSize,
 	}
 	configDirectory := filepath.Dir(path)
 	config.DataDirectory = resolveConfigPath(configDirectory, config.DataDirectory)
@@ -218,6 +224,9 @@ func PrepareDataDir() error {
 	}
 	if Config.MaxConnections < 1 || Config.MaxFrameSize < 1024 {
 		return fmt.Errorf("invalid max_connections or max_frame_size")
+	}
+	if Config.RelayBufferSize != 0 && (Config.RelayBufferSize < 64<<10 || Config.RelayBufferSize > 16<<20) {
+		return fmt.Errorf("relay_buffer_size must be 0 or between 65536 and 16777216 bytes")
 	}
 	if Config.LogLevel != "info" && Config.LogLevel != "warn" && Config.LogLevel != "error" {
 		return fmt.Errorf("invalid log_level %q", Config.LogLevel)

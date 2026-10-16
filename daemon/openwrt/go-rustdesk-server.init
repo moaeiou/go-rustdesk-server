@@ -1,0 +1,35 @@
+#!/bin/sh /etc/rc.common
+
+USE_PROCD=1
+START=95
+STOP=10
+
+PROG="/usr/bin/go-rustdesk-server"
+CONFIG="/etc/go-rustdesk-server/config.toml"
+
+start_service() {
+	[ -x "$PROG" ] || {
+		echo "$PROG is missing or not executable" >&2
+		return 1
+	}
+	[ -r "$CONFIG" ] || {
+		echo "$CONFIG is missing or not readable" >&2
+		return 1
+	}
+
+	procd_open_instance
+	procd_set_param command "$PROG" run -c "$CONFIG"
+	procd_set_param respawn 3600 5 5
+	procd_set_param term_timeout 15
+	procd_set_param limits nofile="65535 65535"
+	procd_set_param stdout 1
+	procd_set_param stderr 1
+	procd_set_param file "$CONFIG"
+	procd_close_instance
+}
+
+reload_service() {
+	stop
+	start
+}
+
