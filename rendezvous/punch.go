@@ -49,9 +49,9 @@ func RendezvousMessagePunchHoleRequest(req *protocol.PunchHoleRequest, writer *t
 			}))
 			return wait(3)
 		}
-		wait := subscribeForMsg(req.GetId(), []string{
-			protocol.TypeRendezvousMessagePunchHoleSent,
-			protocol.TypeRendezvousMessageRelayResponse,
+		wait := subscribeForKeys([]string{
+			req.GetId() + protocol.TypeRendezvousMessagePunchHoleSent,
+			writer.GetAddrStr() + protocol.TypeRendezvousMessageRelayResponse,
 		})
 		peerWriter.SendMsg(protocol.NewRendezvousMessage(&protocol.PunchHole{
 			SocketAddr: protocol.EncodeAddr(writer.GetAddrStr()), RelayServer: relayAddress, NatType: natType,

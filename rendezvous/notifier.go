@@ -70,7 +70,10 @@ func subscribeForMsg(id string, types []string) messageWaiter {
 	for i, messageType := range types {
 		keys[i] = id + messageType
 	}
+	return subscribeForKeys(keys)
+}
 
+func subscribeForKeys(keys []string) messageWaiter {
 	results, cancel := msgNotifier.subscribe(keys)
 	return func(timeoutSeconds uint) (*transport.Writer, protoreflect.ProtoMessage) {
 		defer cancel()
