@@ -13,6 +13,9 @@ peers.json.bak
 .vscode
 .idea/
 
+# test files
+*_test.go
+
 #log
 *.log
 
