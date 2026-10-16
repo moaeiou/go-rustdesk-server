@@ -14,6 +14,7 @@ type Writer struct {
 	tConn          net.Conn
 	uConn          *net.UDPConn
 	addr           *net.UDPAddr
+	pending        []byte
 	loop, detached bool
 	onClose        func()
 }
@@ -51,6 +52,20 @@ func (w *Writer) SetKey(key string) {
 
 func (w *Writer) Detach()        { w.mu.Lock(); w.detached = true; w.mu.Unlock() }
 func (w *Writer) Detached() bool { w.mu.Lock(); defer w.mu.Unlock(); return w.detached }
+
+func (w *Writer) setPending(data []byte) {
+	w.mu.Lock()
+	w.pending = data
+	w.mu.Unlock()
+}
+
+func (w *Writer) takePending() []byte {
+	w.mu.Lock()
+	data := w.pending
+	w.pending = nil
+	w.mu.Unlock()
+	return data
+}
 
 func (w *Writer) Close() {
 	w.closeOnce.Do(func() {

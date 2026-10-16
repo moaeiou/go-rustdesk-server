@@ -99,7 +99,7 @@ func (m *monitor) acceptTCP(conn net.Conn) {
 			_, _ = buf.Write(remaining)
 			frameLength = 0
 			if m.relay {
-				prepareRelayStream(conn, writer)
+				prepareRelayStream(conn, writer, remaining)
 				m.processTCPFrame(frame, conn)
 				return
 			}
@@ -111,7 +111,7 @@ func (m *monitor) acceptTCP(conn net.Conn) {
 	}
 }
 
-func prepareRelayStream(conn net.Conn, writer *Writer) {
+func prepareRelayStream(conn net.Conn, writer *Writer, pending []byte) {
 	// The deadline in acceptTCP only protects the framed relay handshake. Once
 	// handed to the raw relay copier, an idle session must not inherit it.
 	_ = conn.SetReadDeadline(time.Time{})
@@ -127,6 +127,11 @@ func prepareRelayStream(conn net.Conn, writer *Writer) {
 			_ = tcpConn.SetWriteBuffer(size)
 		}
 	}
+	// A TCP read can contain both the framed RequestRelay and the beginning of
+	// the raw encrypted session. Preserve those coalesced bytes for Copy;
+	// dropping them makes both peers pair successfully but their handshake time
+	// out because its first packet is missing.
+	writer.setPending(pending)
 	writer.loop = false
 }
 
