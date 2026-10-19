@@ -24,22 +24,12 @@ func DecodeHead(src []byte) (uint, uint, error) {
 		n |= uint(src[3]) << 24
 	}
 	n >>= 2
-	realLength := n
-	if n <= 0x3F {
-		realLength += 1
-	} else if n <= 0x3FFF {
-		realLength += 2
-	} else if n <= 0x3FFFFF {
-		realLength += 3
-	} else if n <= 0x3FFFFFFF {
-		realLength += 4
-	}
-	return n, realLength, nil
+	return n, n + headLen, nil
 }
 
 func Decode(src []byte) (data []byte, err error) {
-	if src == nil {
-		return
+	if len(src) == 0 {
+		return nil, errors.New("empty frame")
 	}
 	headLen := uint((src[0] & 0x3) + 1)
 	if uint(len(src)) < headLen {

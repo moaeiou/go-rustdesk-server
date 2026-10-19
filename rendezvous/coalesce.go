@@ -9,9 +9,10 @@ import (
 // pendingCall represents one in-flight call shared by every caller that
 // asked for the same key while it was running.
 type pendingCall struct {
-	wg      sync.WaitGroup
-	writer  *transport.Writer
-	message protoreflect.ProtoMessage
+	wg          sync.WaitGroup
+	writer      *transport.Writer
+	message     protoreflect.ProtoMessage
+	relayServer string
 }
 
 // callGroup deduplicates concurrent calls for the same key: only the
@@ -32,24 +33,24 @@ func newCallGroup() *callGroup {
 	return &callGroup{m: make(map[string]*pendingCall)}
 }
 
-func (g *callGroup) Do(key string, fn func() (*transport.Writer, protoreflect.ProtoMessage)) (*transport.Writer, protoreflect.ProtoMessage) {
+func (g *callGroup) Do(key string, fn func() (*transport.Writer, protoreflect.ProtoMessage, string)) (*transport.Writer, protoreflect.ProtoMessage, string) {
 	g.mu.Lock()
 	if c, ok := g.m[key]; ok {
 		g.mu.Unlock()
 		c.wg.Wait()
-		return c.writer, c.message
+		return c.writer, c.message, c.relayServer
 	}
 	c := &pendingCall{}
 	c.wg.Add(1)
 	g.m[key] = c
 	g.mu.Unlock()
 
-	c.writer, c.message = fn()
+	c.writer, c.message, c.relayServer = fn()
 	c.wg.Done()
 
 	g.mu.Lock()
 	delete(g.m, key)
 	g.mu.Unlock()
 
-	return c.writer, c.message
+	return c.writer, c.message, c.relayServer
 }

@@ -14,24 +14,34 @@ func (w *Writer) Copy(destination *Writer) {
 	if w._type != tcp || w.tConn == nil || destination == nil || destination._type != tcp || destination.tConn == nil {
 		return
 	}
+	if w.IsWebSocket() || destination.IsWebSocket() {
+		w.copyMessages(destination)
+		return
+	}
 	started := time.Now()
+	budget := newRelayBudget(w, destination)
 	done := make(chan copyResult, 2)
 	copyStream := func(dst, src io.ReadWriteCloser, pending []byte) {
 		var total int64
+		var output io.Writer = dst
+		if Config.SingleBandwidth > 0 || Config.TotalBandwidth > 0 || budget.blacklisted {
+			output = pacedWriter{dst: dst, budget: budget}
+		}
 		if len(pending) > 0 {
-			n, err := writeAll(dst, pending)
+			n, err := writeAll(output, pending)
 			total += int64(n)
 			if err != nil {
 				done <- copyResult{bytes: total, err: err}
 				return
 			}
 		}
-		n, err := io.Copy(dst, src)
+		n, err := io.Copy(output, src)
 		done <- copyResult{bytes: total + n, err: err}
 	}
 	go copyStream(destination.tConn, w.tConn, w.takePending())
 	go copyStream(w.tConn, destination.tConn, destination.takePending())
 	first := <-done
+	close(budget.stop)
 	// Closing both sides unblocks the other copy immediately and prevents a
 	// half-closed client from retaining a relay goroutine indefinitely.
 	w.Close()

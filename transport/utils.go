@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 )
 
 func Exists(path string) bool {
@@ -59,7 +60,12 @@ func GetHostPort(addr string) (string, uint64) {
 // interface address that can reach the other peer. Client-provided relay
 // addresses are deliberately ignored because a local client may report
 // localhost, which is unusable by its remote peer.
+var relayRotation atomic.Uint64
+
 func RelayServerAddress(writer *Writer, otherPeerIP string) string {
+	if len(Config.RelayServers) > 0 {
+		return normalizeRelayAddress(Config.RelayServers[(relayRotation.Add(1)-1)%uint64(len(Config.RelayServers))])
+	}
 	value := strings.TrimSpace(Config.RelayServer)
 	if value != "" {
 		return normalizeRelayAddress(value)

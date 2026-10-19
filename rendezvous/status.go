@@ -10,8 +10,8 @@ func RendezvousMessageSoftwareUpdate(_ *protocol.SoftwareUpdate) *protocol.Softw
 	return &protocol.SoftwareUpdate{}
 }
 
-func RendezvousMessageTestNatRequest(_ *protocol.TestNatRequest, writer *transport.Writer) *protocol.TestNatResponse {
-	return &protocol.TestNatResponse{Port: int32(writer.GetAddr().GetPort())}
+func RendezvousMessageTestNatRequest(req *protocol.TestNatRequest, writer *transport.Writer) *protocol.TestNatResponse {
+	return &protocol.TestNatResponse{Port: int32(writer.GetAddr().GetPort()), Cu: configurationUpdate(req.GetSerial())}
 }
 
 func RendezvousMessageConfigureUpdate(req *protocol.ConfigUpdate) {
@@ -30,4 +30,11 @@ func RendezvousMessageOnlineRequest(req *protocol.OnlineRequest) *protocol.Onlin
 		}
 	}
 	return &protocol.OnlineResponse{States: states}
+}
+
+func configurationUpdate(serial int32) *protocol.ConfigUpdate {
+	if transport.Config.ConfigSerial <= serial {
+		return nil
+	}
+	return &protocol.ConfigUpdate{Serial: transport.Config.ConfigSerial, RendezvousServers: append([]string(nil), transport.Config.RendezvousServers...)}
 }

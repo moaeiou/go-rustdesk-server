@@ -15,12 +15,15 @@ func Run(ctx context.Context) error {
 	go func() {
 		errors <- transport.NewMonitor(false, "udp", transport.ListenAddress(transport.PortSignal), handlerMsg).Run(ctx)
 	}()
-	for _, addr := range []int{transport.PortNAT, transport.PortSignal, transport.PortWS} {
+	for _, addr := range []int{transport.PortNAT, transport.PortSignal} {
 		addr := addr
 		go func() {
 			errors <- transport.NewMonitor(false, "tcp", transport.ListenAddress(addr), handlerMsg).Run(ctx)
 		}()
 	}
+	go func() {
+		errors <- transport.NewMonitor(false, "ws", transport.ListenAddress(transport.PortWS), handlerMsg).Run(ctx)
+	}()
 	select {
 	case <-ctx.Done():
 		return nil

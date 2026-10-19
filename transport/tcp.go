@@ -66,6 +66,7 @@ func (m *monitor) acceptTCP(conn net.Conn) {
 	defer buf.Free()
 	var frameLength uint
 	temp := make([]byte, 4096)
+	_ = conn.SetReadDeadline(time.Now().Add(frameReadTimeout))
 	for writer.loop {
 		n, err := conn.Read(temp)
 		if err != nil {

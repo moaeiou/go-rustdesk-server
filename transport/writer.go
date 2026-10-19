@@ -2,6 +2,7 @@ package transport
 
 import (
 	"errors"
+	"github.com/gorilla/websocket"
 	"go-rustdesk-server/protocol"
 	"net"
 	"sync"
@@ -12,6 +13,7 @@ type Writer struct {
 	closeOnce      sync.Once
 	key, _type     string
 	tConn          net.Conn
+	wsConn         *websocket.Conn
 	uConn          *net.UDPConn
 	addr           *net.UDPAddr
 	pending        []byte
@@ -30,6 +32,13 @@ func (w *Writer) Write(payload []byte) (int, error) {
 		}
 		return w.uConn.WriteToUDP(payload, w.addr)
 	}
+	if w.wsConn != nil {
+		err := w.wsConn.WriteMessage(websocket.BinaryMessage, payload)
+		if err != nil {
+			return 0, err
+		}
+		return len(payload), nil
+	}
 	if w._type == tcp {
 		if w.tConn == nil {
 			return 0, errors.New("TCP connection is nil")
@@ -38,7 +47,11 @@ func (w *Writer) Write(payload []byte) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		return w.tConn.Write(frame)
+		n, err := writeAll(w.tConn, frame)
+		if err != nil {
+			return n, err
+		}
+		return len(payload), nil
 	}
 	return 0, errors.New("unknown writer type")
 }
@@ -78,3 +91,5 @@ func (w *Writer) Close() {
 		}
 	})
 }
+
+func (w *Writer) IsWebSocket() bool { return w.wsConn != nil }

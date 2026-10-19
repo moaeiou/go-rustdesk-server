@@ -3,6 +3,7 @@ package rendezvous
 import (
 	"go-rustdesk-server/protocol"
 	"go-rustdesk-server/transport"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -21,8 +22,6 @@ func RendezvousMessagePunchHoleRequest(req *protocol.PunchHoleRequest, writer *t
 		return res
 	}
 	peer := value.(*Peer)
-	relayAddress := transport.RelayServerAddress(writer, peer.IP)
-	transport.Info("Punch request id=%s advertised_relay=%s requester=%s peer=%s", req.GetId(), relayAddress, writer.GetAddrStr(), peer.IP)
 	peerWriter, err := transport.GetWriter(peer.ID, transport.UDP)
 	if err != nil {
 		res.Failure = protocol.PunchHoleResponse_OFFLINE
@@ -32,31 +31,35 @@ func RendezvousMessagePunchHoleRequest(req *protocol.PunchHoleRequest, writer *t
 	peerIsLAN := transport.InSubnet(peer.IP)
 	requesterIsLAN := transport.InSubnet(writer.GetAddr().GetIP())
 	natType := req.GetNatType()
-	if peerIsLAN != requesterIsLAN {
+	if transport.Config.AlwaysUseRelay || writer.IsWebSocket() || peerIsLAN != requesterIsLAN {
 		natType = protocol.NatType_SYMMETRIC
 	}
-	sameIntranet := writer.GetAddr().GetIP() == peer.IP
-	dedupKey := peer.ID
+	sameIntranet := !transport.Config.AlwaysUseRelay && !writer.IsWebSocket() && writer.GetAddr().GetIP() == peer.IP
+	dedupKey := peer.ID + ":" + writer.GetAddrStr()
 	if sameIntranet {
 		dedupKey += ":local"
 	}
 
-	replyWriter, reply := punchHoleGroup.Do(dedupKey, func() (*transport.Writer, protoreflect.ProtoMessage) {
+	replyWriter, reply, relayAddress := punchHoleGroup.Do(dedupKey, func() (*transport.Writer, protoreflect.ProtoMessage, string) {
+		relayAddress := transport.RelayServerAddress(writer, peer.IP)
+		transport.Info("Punch request id=%s advertised_relay=%s requester=%s peer=%s", req.GetId(), relayAddress, writer.GetAddrStr(), peer.IP)
 		if sameIntranet {
-			wait := subscribeForMsg(req.GetId(), []string{protocol.TypeRendezvousMessageLocalAddr})
+			wait := subscribeForMsg(writer.GetAddrStr(), []string{protocol.TypeRendezvousMessageLocalAddr})
 			peerWriter.SendMsg(protocol.NewRendezvousMessage(&protocol.FetchLocalAddr{
 				SocketAddr: protocol.EncodeAddr(writer.GetAddrStr()), RelayServer: relayAddress,
 			}))
-			return wait(3)
+			replyWriter, reply := wait(3)
+			return replyWriter, reply, relayAddress
 		}
 		wait := subscribeForKeys([]string{
-			req.GetId() + protocol.TypeRendezvousMessagePunchHoleSent,
+			writer.GetAddrStr() + protocol.TypeRendezvousMessagePunchHoleSent,
 			writer.GetAddrStr() + protocol.TypeRendezvousMessageRelayResponse,
 		})
 		peerWriter.SendMsg(protocol.NewRendezvousMessage(&protocol.PunchHole{
 			SocketAddr: protocol.EncodeAddr(writer.GetAddrStr()), RelayServer: relayAddress, NatType: natType,
 		}))
-		return wait(3)
+		replyWriter, reply := wait(3)
+		return replyWriter, reply, relayAddress
 	})
 	if reply == nil {
 		res.OtherFailure = "NoReturnMessage"
@@ -76,7 +79,8 @@ func RendezvousMessagePunchHoleRequest(req *protocol.PunchHoleRequest, writer *t
 		res.Union = &protocol.PunchHoleResponse_NatType{NatType: sent.GetNatType()}
 	}
 	if relay, ok := reply.(*protocol.RelayResponse); ok {
-		relay.SocketAddr = protocol.EncodeAddr(replyWriter.GetAddrStr())
+		relay = proto.Clone(relay).(*protocol.RelayResponse)
+		relay.SocketAddr = nil
 		relay.RelayServer = relayAddress
 		relay.Union = &protocol.RelayResponse_Pk{Pk: transport.GetSignPK(relay.GetVersion(), peer.ID, peer.PK)}
 		return relay

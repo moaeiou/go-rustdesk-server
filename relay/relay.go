@@ -9,15 +9,37 @@ import (
 )
 
 func Run(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	transport.Info("Relay TCP listening on port %d", transport.PortRelay)
 	waiting := newWaitingPool()
 	go waiting.run(ctx)
 	defer waiting.close()
 	handler := func(message []byte, writer *transport.Writer) { handlerMsg(message, writer, waiting) }
-	return transport.NewMonitor(true, "tcp", transport.ListenAddress(transport.PortRelay), handler).Run(ctx)
+	results := make(chan error, 2)
+	go func() {
+		results <- transport.NewMonitor(true, "tcp", transport.ListenAddress(transport.PortRelay), handler).Run(ctx)
+	}()
+	go func() {
+		results <- transport.NewMonitor(true, "ws", transport.ListenAddress(transport.PortWebAPI), handler).Run(ctx)
+	}()
+	select {
+	case <-ctx.Done():
+		<-results
+		<-results
+		return nil
+	case err := <-results:
+		cancel()
+		<-results
+		return err
+	}
 }
 
 func handlerMsg(msg []byte, writer *transport.Writer, waiting *waitingPool) {
+	if transport.BlockedRelayAddress(writer.GetAddrStr()) {
+		writer.Close()
+		return
+	}
 	transport.Info("RELAY-RX %s len %d", writer.GetAddrStr(), len(msg))
 	envelope := protocol.RendezvousMessage{}
 	if err := proto.Unmarshal(msg, &envelope); err != nil || envelope.Union == nil {

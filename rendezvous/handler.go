@@ -44,6 +44,9 @@ func handlerMsg(msg []byte, writer *transport.Writer) {
 	case protocol.TypeRendezvousMessageRegisterPeer:
 		if req := envelope.GetRegisterPeer(); req != nil {
 			response = protocol.NewRendezvousMessage(RendezvousMessageRegisterPeer(req, writer))
+			if update := configurationUpdate(req.GetSerial()); update != nil {
+				writer.SendMsg(protocol.NewRendezvousMessage(update))
+			}
 		}
 	case protocol.TypeRendezvousMessageSoftwareUpdate:
 		if req := envelope.GetSoftwareUpdate(); req != nil {

@@ -4,6 +4,7 @@ go 1.27.2
 
 require (
 	github.com/gogf/gf/v2 v2.10.3
+	github.com/gorilla/websocket v1.5.3
 	github.com/pelletier/go-toml/v2 v2.4.3
 	go.uber.org/zap v1.28.0
 	google.golang.org/protobuf v1.36.12

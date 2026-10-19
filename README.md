@@ -14,8 +14,12 @@ A RustDesk server rebuilt using Golang
 
 ## ⚠️ Before You Start
 
-- **TCP and UDP ports 21114–21119 must all be open**, or the server will not work correctly.
-- Since this project has no WebUI, port `21114` and `21119` hosts a stub WebServer that always returns `200 OK` to prevent client-side errors.
+- Native clients use TCP `21115–21117` and UDP `21116`.
+- Web clients additionally use WebSocket TCP `21118` (signalling) and `21119`
+  (relay). TLS/WSS can be terminated at a reverse proxy.
+- `21114` remains an HTTP compatibility stub. Ordinary HTTP requests on `21119`
+  also return `200 OK`; WebSocket upgrades now enter the real relay. Neither
+  endpoint implements accounts, an address book, or a management WebUI.
 
 ## 🚀 Quick Start
 
@@ -25,7 +29,7 @@ A RustDesk server rebuilt using Golang
 ./go-rustdesk-server
 ```
 
-That's it. The server will start listening on TCP/UDP ports **21114–21119**.  
+That's it. The server listens on TCP **21114–21119** and UDP **21116**.
 Configure your RustDesk client just as you would with a standard rustdesk-server setup.
 
 If you need more custom settings , please create `config.toml`.
@@ -141,7 +145,19 @@ directory.
 | `base.id_port`          | `21116`              | ID server on both TCP and UDP               |
 | `base.relay_port`       | `21117`              | Relay service                               |
 | `base.websocket_port`   | `21118`              | WebSocket service                           |
-| `base.web_api_port`     | `21119`              | HTTP compatibility/Web API service          |
+| `base.web_api_port`     | `21119`              | WebSocket relay + HTTP compatibility          |
+| `base.relay_servers`    | `[]`                 | Round-robin relay endpoints; mutually exclusive with relay_server |
+| `base.config_serial`    | `0`                  | Legacy configuration revision |
+| `base.rendezvous_servers` | `[]`               | ID servers distributed to older clients |
+| `extra.always_use_relay` | `false`              | Disable direct and LAN connection negotiation |
+| `extra.udp_receive_buffer` | `0`                | UDP receive buffer in bytes; 0 uses OS default |
+| `extra.single_bandwidth` | `0`                 | Per-session bidirectional bandwidth, decimal Mb/s; 0 unlimited |
+| `extra.total_bandwidth` | `0`                  | Aggregate relay bandwidth, decimal Mb/s; 0 unlimited |
+| `extra.blocklist`       | `[]`                 | IPs/CIDRs refused by the relay |
+| `extra.blacklist`       | `[]`                 | IPs/CIDRs limited to limit_speed |
+| `extra.limit_speed`     | `32`                 | Blacklist/downgraded-session bandwidth, Mb/s |
+| `extra.downgrade_threshold` | `0.66`           | Lifetime-average fraction of single_bandwidth triggering downgrade |
+| `extra.downgrade_start_check` | `1800`         | Seconds before downgrade checks; 0 disables |
 | `base.relay_server`     | empty                | Optional public relay override              |
 | `base.data_dir`         | config directory     | Keys and peer state directory               |
 | `log.log_path`          | executable directory | Log file path                               |
@@ -175,7 +191,38 @@ and removed after a successful TOML write. Logs rotate at `log.max_size`; the
 oldest file is destroyed after `log.max_files` is exceeded. Set `max_files = 1`
 to retain no log history.
 
+### Additional server features
+
+Native TCP relay remains a byte stream. WebSocket relay preserves RustDesk
+message boundaries and supports TCP↔WebSocket and WebSocket↔WebSocket pairs.
+WebSocket requests use the same server-key validation as TCP requests. Browser
+origins are allowed; forwarded IP headers are not trusted, so behind a reverse
+proxy IP-based policies see the proxy's address.
+
+For multiple relay servers, configure `base.relay_servers` with endpoints such
+as `["relay-a.example:21117", "relay-b.example:21117"]`. Selection is round-robin,
+without health probing. Both clients must be able to reach the selected server;
+use a public DNS name behind NAT. Web clients use the corresponding relay's
+WebSocket port; the stock client convention is native relay port + 2.
+
+Bandwidth limits apply to the sum of both directions of a session. The total
+limit is shared by all sessions. Either peer matching `blacklist` applies the
+reduced cap to that pair. Automatic downgrade is sticky until disconnection,
+and requires a nonzero `single_bandwidth` and `downgrade_start_check`. The token
+bucket allows a small 32 KiB burst. Defaults preserve this project's previous
+unlimited throughput; upstream defaults are 128/1024 Mb/s.
+
+Configuration changes take effect after service restart/reload. The server does
+not expose the upstream plaintext runtime management console. See
+[the upstream comparison](docs/upstream-comparison.md) for implemented features
+and remaining differences.
+
+Generate a separate key pair or validate an existing one without changing the
+server's stored identity:
+
 ```bash
+./go-rustdesk-server genkeypair
+./go-rustdesk-server validatekeypair '<public-key>' '<secret-key>'
 ./go-rustdesk-server help
 ```
 

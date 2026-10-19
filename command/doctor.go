@@ -27,7 +27,7 @@ var standardServiceChecks = []serviceCheck{
 	{network: "udp", port: 21116, description: "Registration and heartbeat"},
 	{network: "tcp", port: 21117, description: "Relay"},
 	{network: "tcp", port: 21118, description: "Web client"},
-	{network: "tcp", port: 21119, description: "HTTP compatibility"},
+	{network: "tcp", port: 21119, description: "WebSocket relay / HTTP compatibility"},
 }
 
 func Doctor() {

@@ -8,7 +8,7 @@ import (
 )
 
 func startHTTPCompatibility(ctx context.Context, errors chan<- error) {
-	ports := []int{transport.PortHTTPAPI, transport.PortWebAPI}
+	ports := []int{transport.PortHTTPAPI}
 	for _, port := range ports {
 		go func() { errors <- listenOn(ctx, transport.ListenAddress(port)) }()
 	}

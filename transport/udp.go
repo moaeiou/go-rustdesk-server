@@ -15,6 +15,12 @@ func (m *monitor) startUDP(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if Config.UDPReceiveBuffer > 0 {
+		if err := conn.SetReadBuffer(Config.UDPReceiveBuffer); err != nil {
+			conn.Close()
+			return err
+		}
+	}
 	m.conn = conn
 	defer conn.Close()
 	go func() { <-ctx.Done(); _ = conn.Close() }()

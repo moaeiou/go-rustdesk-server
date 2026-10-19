@@ -36,6 +36,27 @@ func run() int {
 					return 1
 				}
 			}
+		case "genkeypair":
+			if len(os.Args) != 2 {
+				command.PrintHelp()
+				return 2
+			}
+			if err := command.GenerateKeyPair(os.Stdout); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				return 1
+			}
+			return 0
+		case "validatekeypair":
+			if len(os.Args) != 4 {
+				command.PrintHelp()
+				return 2
+			}
+			if err := command.ValidateKeyPair(os.Args[2], os.Args[3]); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				return 1
+			}
+			fmt.Println("Key pair is VALID")
+			return 0
 		case "version":
 			command.PrintVersion()
 		case "doctor":

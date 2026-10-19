@@ -5,32 +5,46 @@ import (
 	"fmt"
 	"github.com/pelletier/go-toml/v2"
 	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 const configFileName = "config.toml"
 
 type RuntimeConfig struct {
-	Bind            string
-	HTTPPort        int
-	NATPort         int
-	IDPort          int
-	RelayPort       int
-	WebSocketPort   int
-	WebAPIPort      int
-	RelayServer     string
-	DataDirectory   string
-	LogPath         string
-	LogLevel        string
-	LogColor        bool
-	MaxLogSize      int64
-	MaxLogFiles     int
-	MaxConnections  int64
-	MaxFrameSize    uint
-	EnforceKey      bool
-	RelayBufferSize int
+	Bind               string
+	HTTPPort           int
+	NATPort            int
+	IDPort             int
+	RelayPort          int
+	WebSocketPort      int
+	WebAPIPort         int
+	RelayServer        string
+	RelayServers       []string
+	AlwaysUseRelay     bool
+	RendezvousServers  []string
+	ConfigSerial       int32
+	UDPReceiveBuffer   int
+	SingleBandwidth    int64
+	TotalBandwidth     int64
+	Blocklist          []string
+	Blacklist          []string
+	LimitSpeed         int64
+	DowngradeThreshold float64
+	DowngradeAfter     int64
+	DataDirectory      string
+	LogPath            string
+	LogLevel           string
+	LogColor           bool
+	MaxLogSize         int64
+	MaxLogFiles        int
+	MaxConnections     int64
+	MaxFrameSize       uint
+	EnforceKey         bool
+	RelayBufferSize    int
 }
 
 type configFile struct {
@@ -40,15 +54,18 @@ type configFile struct {
 }
 
 type baseConfig struct {
-	Listen        string `toml:"listen"`
-	RelayServer   string `toml:"relay_server"`
-	HTTPPort      int    `toml:"http_port"`
-	NATPort       int    `toml:"nat_port"`
-	IDPort        int    `toml:"id_port"`
-	RelayPort     int    `toml:"relay_port"`
-	WebSocketPort int    `toml:"websocket_port"`
-	WebAPIPort    int    `toml:"web_api_port"`
-	DataDirectory string `toml:"data_dir"`
+	Listen            string   `toml:"listen"`
+	RelayServer       string   `toml:"relay_server"`
+	RelayServers      []string `toml:"relay_servers"`
+	RendezvousServers []string `toml:"rendezvous_servers"`
+	ConfigSerial      int32    `toml:"config_serial"`
+	HTTPPort          int      `toml:"http_port"`
+	NATPort           int      `toml:"nat_port"`
+	IDPort            int      `toml:"id_port"`
+	RelayPort         int      `toml:"relay_port"`
+	WebSocketPort     int      `toml:"websocket_port"`
+	WebAPIPort        int      `toml:"web_api_port"`
+	DataDirectory     string   `toml:"data_dir"`
 }
 
 type logConfig struct {
@@ -60,10 +77,19 @@ type logConfig struct {
 }
 
 type extraConfig struct {
-	MaxConnections  int64 `toml:"max_connections"`
-	MaxFrameSize    uint  `toml:"max_frame_size"`
-	EnforceKey      bool  `toml:"enforce_key"`
-	RelayBufferSize int   `toml:"relay_buffer_size"`
+	AlwaysUseRelay     bool     `toml:"always_use_relay"`
+	UDPReceiveBuffer   int      `toml:"udp_receive_buffer"`
+	SingleBandwidth    int64    `toml:"single_bandwidth"`
+	TotalBandwidth     int64    `toml:"total_bandwidth"`
+	Blocklist          []string `toml:"blocklist"`
+	Blacklist          []string `toml:"blacklist"`
+	LimitSpeed         int64    `toml:"limit_speed"`
+	DowngradeThreshold float64  `toml:"downgrade_threshold"`
+	DowngradeAfter     int64    `toml:"downgrade_start_check"`
+	MaxConnections     int64    `toml:"max_connections"`
+	MaxFrameSize       uint     `toml:"max_frame_size"`
+	EnforceKey         bool     `toml:"enforce_key"`
+	RelayBufferSize    int      `toml:"relay_buffer_size"`
 }
 
 var Config, configLoadError = loadConfig()
@@ -102,7 +128,8 @@ func LoadConfigFile(path string) error {
 func loadConfig() (RuntimeConfig, error) {
 	baseDirectory := executableDir()
 	config := RuntimeConfig{
-		Bind:            "::",
+		Bind:       "::",
+		LimitSpeed: 32, DowngradeThreshold: 0.66, DowngradeAfter: 1800,
 		HTTPPort:        21114,
 		NATPort:         21115,
 		IDPort:          21116,
@@ -141,6 +168,7 @@ func loadConfig() (RuntimeConfig, error) {
 		},
 		Extra: extraConfig{
 			MaxConnections: config.MaxConnections, MaxFrameSize: config.MaxFrameSize,
+			LimitSpeed: config.LimitSpeed, DowngradeThreshold: config.DowngradeThreshold, DowngradeAfter: config.DowngradeAfter,
 			EnforceKey: config.EnforceKey, RelayBufferSize: config.RelayBufferSize,
 		},
 	}
@@ -151,6 +179,10 @@ func loadConfig() (RuntimeConfig, error) {
 	}
 	config = RuntimeConfig{
 		Bind: file.Base.Listen, RelayServer: file.Base.RelayServer,
+		RelayServers: file.Base.RelayServers, RendezvousServers: file.Base.RendezvousServers, ConfigSerial: file.Base.ConfigSerial,
+		AlwaysUseRelay: file.Extra.AlwaysUseRelay, UDPReceiveBuffer: file.Extra.UDPReceiveBuffer,
+		SingleBandwidth: file.Extra.SingleBandwidth, TotalBandwidth: file.Extra.TotalBandwidth, Blocklist: file.Extra.Blocklist,
+		Blacklist: file.Extra.Blacklist, LimitSpeed: file.Extra.LimitSpeed, DowngradeThreshold: file.Extra.DowngradeThreshold, DowngradeAfter: file.Extra.DowngradeAfter,
 		HTTPPort: file.Base.HTTPPort, NATPort: file.Base.NATPort, IDPort: file.Base.IDPort,
 		RelayPort: file.Base.RelayPort, WebSocketPort: file.Base.WebSocketPort, WebAPIPort: file.Base.WebAPIPort,
 		DataDirectory: file.Base.DataDirectory, LogPath: file.Log.Path,
@@ -215,6 +247,27 @@ func PrepareDataDir() error {
 			return fmt.Errorf("%s and %s cannot both use port %d", previous, name, port)
 		}
 		usedPorts[port] = name
+	}
+	if Config.ConfigSerial < 0 || Config.UDPReceiveBuffer < 0 || Config.SingleBandwidth < 0 || Config.TotalBandwidth < 0 || Config.SingleBandwidth > 1000000 || Config.TotalBandwidth > 1000000 {
+		return fmt.Errorf("invalid config_serial, udp_receive_buffer or bandwidth (0..1000000 Mb/s)")
+	}
+	if len(Config.RelayServers) > 0 && Config.RelayServer != "" {
+		return fmt.Errorf("use relay_server or relay_servers, not both")
+	}
+	for _, address := range Config.RelayServers {
+		if strings.TrimSpace(address) == "" {
+			return fmt.Errorf("relay_servers contains empty address")
+		}
+	}
+	if Config.LimitSpeed < 0 || Config.LimitSpeed > 1000000 || Config.DowngradeAfter < 0 || Config.DowngradeThreshold < 0 || Config.DowngradeThreshold > 1 {
+		return fmt.Errorf("invalid relay downgrade settings")
+	}
+	for _, entry := range append(append([]string(nil), Config.Blocklist...), Config.Blacklist...) {
+		if _, err := netip.ParseAddr(entry); err != nil {
+			if _, err := netip.ParsePrefix(entry); err != nil {
+				return fmt.Errorf("invalid blocklist entry %q", entry)
+			}
+		}
 	}
 	if Config.Bind == "" {
 		return fmt.Errorf("bind must not be empty")

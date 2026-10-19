@@ -37,6 +37,9 @@ func NewMonitor(relay bool, network, addr string, call func([]byte, *Writer)) *m
 }
 
 func (m *monitor) Run(ctx context.Context) error {
+	if m.network == "ws" {
+		return m.startWebSocket(ctx)
+	}
 	if m.network == udp {
 		return m.startUDP(ctx)
 	}

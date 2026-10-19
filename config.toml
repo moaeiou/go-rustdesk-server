@@ -5,6 +5,11 @@ listen = "::"
 # Leave empty to derive the relay address from the incoming connection and the
 # route to the other peer. Behind NAT, set the public DNS name or IP explicitly.
 relay_server = ""
+# Alternatively, round-robin across multiple relay endpoints. Do not set both.
+relay_servers = []
+# Legacy client configuration distribution; increment serial after changes.
+config_serial = 0
+rendezvous_servers = []
 
 # Every service port is independent and can be changed without moving the
 # others. The ID port listens on both TCP and UDP.
@@ -13,6 +18,7 @@ nat_port = 21115
 id_port = 21116
 relay_port = 21117
 websocket_port = 21118
+# WebSocket relay; ordinary HTTP requests retain the compatibility response.
 web_api_port = 21119
 
 data_dir = "./"
@@ -25,6 +31,22 @@ max_size = 10485760
 max_files = 4
 
 [extra]
+# Force relay instead of direct/LAN connections, including for web clients.
+always_use_relay = false
+# UDP socket receive buffer in bytes; 0 keeps the OS default.
+udp_receive_buffer = 0
+# Decimal Mb/s, shared across both directions. 0 means unlimited.
+single_bandwidth = 0
+total_bandwidth = 0
+# IP addresses or CIDRs. blocklist refuses relay; blacklist uses limit_speed.
+blocklist = []
+blacklist = []
+limit_speed = 32
+# Downgrade when lifetime average exceeds single_bandwidth * threshold.
+# Set downgrade_start_check = 0 to disable automatic downgrade.
+downgrade_threshold = 0.66
+downgrade_start_check = 1800
+
 # Reject connection requests whose configured server key does not match.
 enforce_key = true
 # Per-socket TCP buffer for absorbing short relay traffic bursts. Set 0 to use
