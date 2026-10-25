@@ -58,6 +58,9 @@ func handlerMsg(msg []byte, writer *transport.Writer, waiting *waitingPool) {
 		}
 		if !transport.KeyMatches(rr.GetLicenceKey()) {
 			transport.Warn("Relay authentication failed from %s: invalid key", writer.GetAddrStr())
+			writer.SendMsg(protocol.NewRendezvousMessage(&protocol.RelayResponse{
+				RefuseReason: "Invalid connection key",
+			}))
 			writer.Close()
 			return
 		}

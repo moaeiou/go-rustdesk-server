@@ -146,7 +146,7 @@ directory.
 | `base.relay_port`       | `21117`              | Relay service                               |
 | `base.websocket_port`   | `21118`              | WebSocket service                           |
 | `base.web_api_port`     | `21119`              | WebSocket relay + HTTP compatibility          |
-| `base.relay_servers`    | `[]`                 | Round-robin relay endpoints; mutually exclusive with relay_server |
+| `base.relay_servers`    | `[]`                 | One relay endpoint as a string, or multiple endpoints as an array |
 | `base.config_serial`    | `0`                  | Legacy configuration revision |
 | `base.rendezvous_servers` | `[]`               | ID servers distributed to older clients |
 | `extra.always_use_relay` | `false`              | Disable direct and LAN connection negotiation |
@@ -158,7 +158,6 @@ directory.
 | `extra.limit_speed`     | `32`                 | Blacklist/downgraded-session bandwidth, Mb/s |
 | `extra.downgrade_threshold` | `0.66`           | Lifetime-average fraction of single_bandwidth triggering downgrade |
 | `extra.downgrade_start_check` | `1800`         | Seconds before downgrade checks; 0 disables |
-| `base.relay_server`     | empty                | Optional public relay override              |
 | `base.data_dir`         | config directory     | Keys and peer state directory               |
 | `log.log_path`          | executable directory | Log file path                               |
 | `log.log_level`         | `info`               | `info`, `warn`, or `error`                  |
@@ -199,11 +198,17 @@ WebSocket requests use the same server-key validation as TCP requests. Browser
 origins are allowed; forwarded IP headers are not trusted, so behind a reverse
 proxy IP-based policies see the proxy's address.
 
-For multiple relay servers, configure `base.relay_servers` with endpoints such
-as `["relay-a.example:21117", "relay-b.example:21117"]`. Selection is round-robin,
-without health probing. Both clients must be able to reach the selected server;
-use a public DNS name behind NAT. Web clients use the corresponding relay's
-WebSocket port; the stock client convention is native relay port + 2.
+For one relay server, `base.relay_servers` accepts a string such as
+`"relay-a.example:21117"`. For multiple relay servers, use an array such as
+`["relay-a.example:21117", "relay-b.example:21117"]`. Array selection is
+round-robin, without health probing. Both clients must be able to reach the
+selected server; use a public DNS name behind NAT. Web clients use the
+corresponding relay's WebSocket port; the stock client convention is native
+relay port + 2.
+
+When `base.relay_servers` is empty, the server derives a relay address from the
+incoming connection and route to the other peer. Behind NAT, configure a
+publicly reachable endpoint in `base.relay_servers`.
 
 Bandwidth limits apply to the sum of both directions of a session. The total
 limit is shared by all sessions. Either peer matching `blacklist` applies the

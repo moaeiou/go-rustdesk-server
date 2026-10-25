@@ -2,10 +2,8 @@
 # Listen on IPv4 and IPv6. Use "0.0.0.0" for IPv4 only.
 listen = "::"
 
-# Leave empty to derive the relay address from the incoming connection and the
-# route to the other peer. Behind NAT, set the public DNS name or IP explicitly.
-relay_server = ""
-# Alternatively, round-robin across multiple relay endpoints. Do not set both.
+# Accepts one string or an array; arrays are round-robin. Leave empty to derive
+# the relay address from the incoming connection and route to the other peer.
 relay_servers = []
 # Legacy client configuration distribution; increment serial after changes.
 config_serial = 0

@@ -22,7 +22,6 @@ type RuntimeConfig struct {
 	RelayPort          int
 	WebSocketPort      int
 	WebAPIPort         int
-	RelayServer        string
 	RelayServers       []string
 	AlwaysUseRelay     bool
 	RendezvousServers  []string
@@ -55,8 +54,7 @@ type configFile struct {
 
 type baseConfig struct {
 	Listen            string   `toml:"listen"`
-	RelayServer       string   `toml:"relay_server"`
-	RelayServers      []string `toml:"relay_servers"`
+	RelayServers      relayServerList `toml:"relay_servers"`
 	RendezvousServers []string `toml:"rendezvous_servers"`
 	ConfigSerial      int32    `toml:"config_serial"`
 	HTTPPort          int      `toml:"http_port"`
@@ -66,6 +64,23 @@ type baseConfig struct {
 	WebSocketPort     int      `toml:"websocket_port"`
 	WebAPIPort        int      `toml:"web_api_port"`
 	DataDirectory     string   `toml:"data_dir"`
+}
+
+type relayServerList []string
+
+func (servers *relayServerList) UnmarshalTOML(data []byte) error {
+	var single string
+	if err := toml.Unmarshal(data, &single); err == nil {
+		*servers = relayServerList{single}
+		return nil
+	}
+
+	var multiple []string
+	if err := toml.Unmarshal(data, &multiple); err != nil {
+		return fmt.Errorf("relay_servers must be a string or an array of strings: %w", err)
+	}
+	*servers = relayServerList(multiple)
+	return nil
 }
 
 type logConfig struct {
@@ -157,7 +172,7 @@ func loadConfig() (RuntimeConfig, error) {
 	}
 	file := configFile{
 		Base: baseConfig{
-			Listen: config.Bind, RelayServer: config.RelayServer,
+			Listen: config.Bind,
 			HTTPPort: config.HTTPPort, NATPort: config.NATPort, IDPort: config.IDPort,
 			RelayPort: config.RelayPort, WebSocketPort: config.WebSocketPort, WebAPIPort: config.WebAPIPort,
 			DataDirectory: config.DataDirectory,
@@ -178,8 +193,8 @@ func loadConfig() (RuntimeConfig, error) {
 		return config, fmt.Errorf("parse config %s: %w", path, err)
 	}
 	config = RuntimeConfig{
-		Bind: file.Base.Listen, RelayServer: file.Base.RelayServer,
-		RelayServers: file.Base.RelayServers, RendezvousServers: file.Base.RendezvousServers, ConfigSerial: file.Base.ConfigSerial,
+		Bind: file.Base.Listen,
+		RelayServers: []string(file.Base.RelayServers), RendezvousServers: file.Base.RendezvousServers, ConfigSerial: file.Base.ConfigSerial,
 		AlwaysUseRelay: file.Extra.AlwaysUseRelay, UDPReceiveBuffer: file.Extra.UDPReceiveBuffer,
 		SingleBandwidth: file.Extra.SingleBandwidth, TotalBandwidth: file.Extra.TotalBandwidth, Blocklist: file.Extra.Blocklist,
 		Blacklist: file.Extra.Blacklist, LimitSpeed: file.Extra.LimitSpeed, DowngradeThreshold: file.Extra.DowngradeThreshold, DowngradeAfter: file.Extra.DowngradeAfter,
@@ -250,9 +265,6 @@ func PrepareDataDir() error {
 	}
 	if Config.ConfigSerial < 0 || Config.UDPReceiveBuffer < 0 || Config.SingleBandwidth < 0 || Config.TotalBandwidth < 0 || Config.SingleBandwidth > 1000000 || Config.TotalBandwidth > 1000000 {
 		return fmt.Errorf("invalid config_serial, udp_receive_buffer or bandwidth (0..1000000 Mb/s)")
-	}
-	if len(Config.RelayServers) > 0 && Config.RelayServer != "" {
-		return fmt.Errorf("use relay_server or relay_servers, not both")
 	}
 	for _, address := range Config.RelayServers {
 		if strings.TrimSpace(address) == "" {

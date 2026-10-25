@@ -66,10 +66,6 @@ func RelayServerAddress(writer *Writer, otherPeerIP string) string {
 	if len(Config.RelayServers) > 0 {
 		return normalizeRelayAddress(Config.RelayServers[(relayRotation.Add(1)-1)%uint64(len(Config.RelayServers))])
 	}
-	value := strings.TrimSpace(Config.RelayServer)
-	if value != "" {
-		return normalizeRelayAddress(value)
-	}
 	if writer != nil {
 		if host, _, err := net.SplitHostPort(writer.GetLocalAddrStr()); err == nil {
 			if ip := net.ParseIP(strings.Trim(host, "[]")); usableRelayIP(ip) {
