@@ -34,7 +34,10 @@ func RendezvousMessagePunchHoleRequest(req *protocol.PunchHoleRequest, writer *t
 	if transport.Config.AlwaysUseRelay || writer.IsWebSocket() || peerIsLAN != requesterIsLAN {
 		natType = protocol.NatType_SYMMETRIC
 	}
-	sameIntranet := !transport.Config.AlwaysUseRelay && !writer.IsWebSocket() && writer.GetAddr().GetIP() == peer.IP
+	sameIntranet := shouldFetchLocalAddr(
+		transport.Config.AlwaysUseRelay, writer.IsWebSocket(), peerIsLAN, requesterIsLAN,
+		writer.GetAddr().GetIP(), peer.IP,
+	)
 	dedupKey := peer.ID + ":" + writer.GetAddrStr()
 	if sameIntranet {
 		dedupKey += ":local"
@@ -86,4 +89,8 @@ func RendezvousMessagePunchHoleRequest(req *protocol.PunchHoleRequest, writer *t
 		return relay
 	}
 	return res
+}
+
+func shouldFetchLocalAddr(alwaysUseRelay, websocket, peerIsLAN, requesterIsLAN bool, requesterIP, peerIP string) bool {
+	return !alwaysUseRelay && !websocket && (peerIsLAN && requesterIsLAN || requesterIP == peerIP)
 }

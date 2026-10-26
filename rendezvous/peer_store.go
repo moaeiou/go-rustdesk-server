@@ -3,7 +3,6 @@ package rendezvous
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"github.com/pelletier/go-toml/v2"
 	"go-rustdesk-server/transport"
@@ -35,26 +34,14 @@ func peerStorePath() string { return filepath.Join(transport.DataDir(), "peers.t
 
 func loadPeers() error {
 	peers, err := readPeersTOML(peerStorePath())
-	if err == nil {
-		storePeersInMemory(peers)
-		return removeLegacyPeerFiles()
+	if os.IsNotExist(err) {
+		return removePeerStoreBackups()
 	}
-	if !os.IsNotExist(err) {
-		return err
-	}
-	peers, migrated, err := readLegacyPeers()
 	if err != nil {
 		return err
 	}
-	if !migrated {
-		return removeLegacyPeerFiles()
-	}
 	storePeersInMemory(peers)
-	if err := savePeers(); err != nil {
-		return fmt.Errorf("migrate peers to TOML: %w", err)
-	}
-	transport.Info("Migrated peer store to %s", peerStorePath())
-	return removeLegacyPeerFiles()
+	return removePeerStoreBackups()
 }
 
 func storePeersInMemory(peers []*Peer) {
@@ -85,31 +72,6 @@ func readPeersTOML(path string) ([]*Peer, error) {
 		peers = append(peers, peer)
 	}
 	return peers, nil
-}
-
-func readLegacyPeers() ([]*Peer, bool, error) {
-	paths := []string{
-		filepath.Join(transport.DataDir(), "peers.json"),
-		filepath.Join(transport.DataDir(), "peers.json.bak"),
-	}
-	var lastError error
-	for _, path := range paths {
-		data, err := os.ReadFile(path)
-		if os.IsNotExist(err) {
-			continue
-		}
-		if err != nil {
-			lastError = err
-			continue
-		}
-		var peers []*Peer
-		if err := json.Unmarshal(data, &peers); err != nil {
-			lastError = fmt.Errorf("parse %s: %w", path, err)
-			continue
-		}
-		return peers, true, nil
-	}
-	return nil, false, lastError
 }
 
 func savePeers() error {
@@ -197,12 +159,10 @@ func (stored storedPeer) peer() (*Peer, error) {
 	}, nil
 }
 
-func removeLegacyPeerFiles() error {
+func removePeerStoreBackups() error {
 	paths := []string{
 		filepath.Join(transport.DataDir(), "peer.toml.bak"),
 		filepath.Join(transport.DataDir(), "peers.toml.bak"),
-		filepath.Join(transport.DataDir(), "peers.json"),
-		filepath.Join(transport.DataDir(), "peers.json.bak"),
 	}
 	for _, path := range paths {
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {

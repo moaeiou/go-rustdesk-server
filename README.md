@@ -185,10 +185,9 @@ autotuning. Larger values consume more kernel memory per active Relay client
 and cannot eliminate TCP head-of-line blocking caused by packet loss.
 
 Peer identities and public keys are persisted atomically in `peers.toml`; no
-peer-store backup file is created. Existing `peers.json` data is migrated once
-and removed after a successful TOML write. Logs rotate at `log.max_size`; the
-oldest file is destroyed after `log.max_files` is exceeded. Set `max_files = 1`
-to retain no log history.
+peer-store backup file is created. Logs rotate at `log.max_size`; the oldest
+file is destroyed after `log.max_files` is exceeded. Set `max_files = 1` to
+retain no log history.
 
 ### Additional server features
 
