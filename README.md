@@ -6,6 +6,20 @@ A RustDesk server rebuilt using Golang
 
 [GitHub Releases](https://github.com/moaeiou/go-rustdesk-server/releases)
 
+## 🎉 This project has been archived!
+
+The rustdesk-server has more problem
+
+Such as:
+- Slowly connection
+- If even a single packet fails to arrive, everything comes to a complete standstill.
+- The sound remains normal when it freezes.
+- The encoding and decoding speeds are far too slow, even when hardware encoding/decoding is enabled on both ends.
+
+But now I have OpenUUYC, which resolves many of the issues that UUYC had on Linux.
+
+So, I concluded that there was no need to continue maintaining it.
+
 ## ✨ Features
 
 - 🩺 **Designed to cure the high blood pressure caused by compiling the original RustDesk Server**
